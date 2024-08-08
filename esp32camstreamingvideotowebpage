@@ -1,0 +1,126 @@
+# like the ip camera i want that my esp32 code will stream the video and i can show the video in my react js
+#EX-1 a) flask code 
+import cv2
+import time
+from flask import Flask, Response
+
+app = Flask(__name__)
+camera_name = "ENTRY"
+#camera_url = "rtsp://satyendra:Satyendr@123@192.168.1.7:8080/h264_ulaw.sdp"
+camera_url = "rtsp://admin:dsal@123@192.168.1.113:554/cam/realmonitor?channel=1&subtype=1"
+
+def generate_frames():
+    cap = cv2.VideoCapture(camera_url)
+    if not cap.isOpened():
+        print(f"Unable to open video capture for {camera_name}")
+        return
+    
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print(f"Failed to capture frame from {camera_name}")
+            time.sleep(5)  # Wait before retrying
+            cap = cv2.VideoCapture(camera_url)  # Reinitialize capture
+            continue
+        _, buffer = cv2.imencode('.jpg', frame)
+        frame = buffer.tobytes()
+        # Yield the frame in MJPEG format
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/')
+def index():
+    return '''
+        <html>
+        <body>
+            <h1>IP Camera Stream</h1>
+            <img src="/video_feed" width="640" height="480">
+        </body>
+        </html>
+    '''
+    
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+
+#EX-1 b) react js code
+import React from 'react';
+
+const VideoStream = () => {
+  return (
+    <div>
+      <h1>IP Camera Stream</h1>
+      <img src="http://localhost:5000/video_feed" width="640" height="480" alt="IP Camera Stream" />
+    </div>
+  );
+};
+
+export default VideoStream;
+
+
+#EX-2 in the above code is streaming the video in the react js code through an ip camera. but i want to do the same thing using the esp32cam module
+import network
+import socket
+import camera
+import uasyncio as asyncio
+
+# Connect to Wi-Fi
+def connect_wifi(ssid, password):
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    if not wlan.isconnected():
+        print('Connecting to network...')
+        wlan.connect(ssid, password)
+        while not wlan.isconnected():
+            pass
+    print('Network config:', wlan.ifconfig())
+
+# Replace with your Wi-Fi credentials
+ssid = 'your_SSID'
+password = 'your_PASSWORD'
+connect_wifi(ssid, password)
+
+# Initialize the camera
+camera.init(0, format=camera.JPEG)
+
+# HTTP server to stream MJPEG
+async def serve_video():
+    addr = socket.getaddrinfo('0.0.0.0', 80)[0][-1]
+    s = socket.socket()
+    s.bind(addr)
+    s.listen(1)
+    print('Listening on', addr)
+    
+    while True:
+        cl, addr = s.accept()
+        print('Client connected from', addr)
+        request = cl.recv(1024)
+        if b"GET / HTTP/1.1" in request:
+            cl.send('HTTP/1.1 200 OK\r\n'
+                    'Content-Type: multipart/x-mixed-replace; boundary=frame\r\n'
+                    'Access-Control-Allow-Origin: *\r\n'
+                    '\r\n')
+            while True:
+                try:
+                    buf = camera.capture()
+                    if buf:
+                        cl.send(b'--frame\r\n'
+                                b'Content-Type: image/jpeg\r\n\r\n' + buf + b'\r\n')
+                except Exception as e:
+                    print('Error:', e)
+                    break
+        cl.close()
+
+# Run the server
+try:
+    asyncio.run(serve_video())
+except Exception as e:
+    print('Error:', e)
+finally:
+    camera.deinit()
+
+#EX-2 b) 

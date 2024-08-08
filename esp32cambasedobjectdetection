@@ -1,0 +1,2 @@
+in this i will send the images from the esp32cam based camera. means i will send the frame to my python script in which object detection code is running. so we can do this also
+#EX-1 

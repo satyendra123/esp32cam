@@ -1,0 +1,136 @@
+# in this we have made a simple webserver so that in the webpage we can stream the camera and also i can make the car run go forward, backward, left and right using this
+import network
+import socket
+import camera
+import uasyncio as asyncio
+from machine import Pin
+
+# Replace with your Wi-Fi credentials
+SSID = 'your_SSID'
+PASSWORD = 'your_PASSWORD'
+
+# Define GPIO pins for car control
+FORWARD_PIN = 12
+BACKWARD_PIN = 13
+LEFT_PIN = 14
+RIGHT_PIN = 15
+
+# Initialize GPIO pins for car control
+forward = Pin(FORWARD_PIN, Pin.OUT)
+backward = Pin(BACKWARD_PIN, Pin.OUT)
+left = Pin(LEFT_PIN, Pin.OUT)
+right = Pin(RIGHT_PIN, Pin.OUT)
+
+def connect_wifi(ssid, password):
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    if not wlan.isconnected():
+        print('Connecting to network...')
+        wlan.connect(ssid, password)
+        while not wlan.isconnected():
+            pass
+    print('Network config:', wlan.ifconfig())
+
+# Connect to Wi-Fi
+connect_wifi(SSID, PASSWORD)
+
+# Initialize the camera
+camera.init(0, format=camera.JPEG)
+
+# HTML content for the web page
+html = """<!DOCTYPE html>
+<html>
+<head>
+    <title>WiFi Car Control</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #video { display: block; margin: 10px auto; }
+        button { font-size: 20px; margin: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Car Control</h1>
+    <img id="video" src="/video" width="640" height="480">
+    <br>
+    <button onclick="fetch('/forward')">Forward</button>
+    <button onclick="fetch('/backward')">Backward</button>
+    <button onclick="fetch('/left')">Left</button>
+    <button onclick="fetch('/right')">Right</button>
+    <button onclick="fetch('/stop')">Stop</button>
+    <script>
+        setInterval(() => {
+            document.getElementById('video').src = '/video?' + new Date().getTime();
+        }, 1000); // Refresh video every second
+    </script>
+</body>
+</html>
+"""
+
+async def handle_client(client):
+    request = client.recv(1024)
+    request_str = str(request)
+    
+    if '/video' in request_str:
+        # Serve video stream
+        client.send(b'HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=frame\r\n\r\n')
+        while True:
+            buf = camera.capture()
+            client.send(b'--frame\r\n')
+            client.send(b'Content-Type: image/jpeg\r\n\r\n')
+            client.send(buf)
+            client.send(b'\r\n')
+    elif '/forward' in request_str:
+        forward.value(1)
+        backward.value(0)
+        left.value(0)
+        right.value(0)
+    elif '/backward' in request_str:
+        forward.value(0)
+        backward.value(1)
+        left.value(0)
+        right.value(0)
+    elif '/left' in request_str:
+        forward.value(0)
+        backward.value(0)
+        left.value(1)
+        right.value(0)
+    elif '/right' in request_str:
+        forward.value(0)
+        backward.value(0)
+        left.value(0)
+        right.value(1)
+    elif '/stop' in request_str:
+        forward.value(0)
+        backward.value(0)
+        left.value(0)
+        right.value(0)
+    
+    if not '/video' in request_str:
+        response = html
+        client.send('HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n')
+        client.send(response)
+    client.close()
+
+async def web_server():
+    addr = socket.getaddrinfo('0.0.0.0', 80)[0][-1]
+    s = socket.socket()
+    s.bind(addr)
+    s.listen(1)
+    print('Listening on', addr)
+    
+    while True:
+        cl, addr = s.accept()
+        print('Client connected from', addr)
+        await handle_client(cl)
+
+# Run the web server
+try:
+    asyncio.run(web_server())
+except Exception as e:
+    print('Error:', e)
+finally:
+    camera.deinit()
+    forward.value(0)
+    backward.value(0)
+    left.value(0)
+    right.value(0)

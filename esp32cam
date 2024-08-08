@@ -1,0 +1,14 @@
+#EX-1
+import camera
+camera.init(0, format=camera.JPEG, fb_location=camera.PSRAM)
+
+buf = camera.capture()  # Size is 640x480
+
+# Save the image to a file
+with open("first_image.png", "wb") as f:
+    f.write(buf)  # buf contains the image data, so just write it to the file
+    print("Photo capture complete. Click the 'Refresh' button on the right of 'MicroPython Device' in Thonny's left pane.\n"
+          "Then, select the image and right-click to download it to your computer...")
+
+
+#EX-2

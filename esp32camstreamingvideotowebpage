@@ -1,4 +1,4 @@
-# like the ip camera i want that my esp32 code will stream the video and i can show the video in my react js
+# like the ip camera i want that i can stream the video through an ip camera to my webpage
 #EX-1 a) flask code 
 import cv2
 import time

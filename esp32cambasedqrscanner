@@ -1,0 +1,108 @@
+# in this i am sending the esp32cam image from the esp32cam module using tcp ip module. and write the python script which will receive the image and finds the qr data 
+import socket
+import network
+import camera
+import time
+
+# Connect to Wi-Fi
+wlan = network.WLAN(network.STA_IF)
+wlan.active(True)
+if not wlan.isconnected():
+    print('Connecting to network...')
+    wlan.connect('your_SSID', 'your_PASSWORD')  # Replace with your Wi-Fi credentials
+    
+    while not wlan.isconnected():
+        pass
+print('Network config:', wlan.ifconfig())
+
+# Initialize the camera
+try:
+    camera.init(0, format=camera.JPEG)
+except Exception as e:
+    camera.deinit()
+    camera.init(0, format=camera.JPEG)
+
+# TCP Socket creation
+server_ip = "192.168.31.53"  # Replace with your server's IP address
+server_port = 9090  # Replace with your server's port
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.connect((server_ip, server_port))
+
+try:
+    while True:
+        buf = camera.capture()  # Capture image data
+        img_size = len(buf)
+        s.sendall(img_size.to_bytes(4, 'big'))  # Send image size as 4 bytes (header)
+        s.sendall(buf)  # Send image data
+        time.sleep(1)  # Adjust the delay between captures if needed
+except Exception as e:
+    print('Error:', e)
+finally:
+    camera.deinit()
+    s.close()
+
+python script code
+import socket
+import cv2
+import numpy as np
+from pyzbar.pyzbar import decode
+
+# Set up the TCP server
+server_ip = "0.0.0.0"  # Listen on all available interfaces
+server_port = 9090
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind((server_ip, server_port))
+s.listen(1)
+print(f"Listening on {server_ip}:{server_port}")
+
+# Accept a single connection
+conn, addr = s.accept()
+print(f"Connected by {addr}")
+
+try:
+    while True:
+        # Receive the image size (4 bytes, big-endian)
+        img_size_data = conn.recv(4)
+        if not img_size_data:
+            break
+        
+        img_size = int.from_bytes(img_size_data, 'big')
+        
+        # Receive the image data
+        img_data = b""
+        while len(img_data) < img_size:
+            packet = conn.recv(4096)  # Adjust the buffer size as needed
+            if not packet:
+                break
+            img_data += packet
+        
+        if len(img_data) != img_size:
+            print("Incomplete image received")
+            continue
+        
+        # Convert the byte data to a numpy array
+        img_array = np.frombuffer(img_data, dtype=np.uint8)
+        
+        # Decode the image from the numpy array
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        
+        # Display the image (optional)
+        cv2.imshow("Received Image", img)
+        
+        # Decode QR codes in the image
+        qr_codes = decode(img)
+        
+        for qr in qr_codes:
+            qr_data = qr.data.decode('utf-8')
+            print(f"QR Code Data: {qr_data}")
+        
+        # Exit if 'q' is pressed
+        if cv2.waitKey(1) == ord('q'):
+            break
+
+except Exception as e:
+    print("Error:", e)
+finally:
+    conn.close()
+    s.close()
+    cv2.destroyAllWindows()

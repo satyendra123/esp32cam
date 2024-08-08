@@ -12,3 +12,421 @@ with open("first_image.png", "wb") as f:
 
 
 #EX-2
+import camera
+
+
+# 初始化摄像头
+try:
+    camera.init(0, format=camera.JPEG)
+except Exception as e:
+    camera.deinit()
+    camera.init(0, format=camera.JPEG)
+
+# 拍摄一张图片
+buf = camera.capture()  # 大小是640x480
+
+# 保存图片到文件
+with open("第一张图片.png", "wb") as f:
+    f.write(buf)  # buf中的数据就是图片的数据，所以直接写入到文件就行了
+    print("拍照已完成，点击Thonny左侧【MicroPython设备】右侧的三，\n然后看到‘刷新’，点击刷新会看到 图片，\n然后右击图片名称，选择下载到电脑的路径即可...")
+
+camera.deinit()
+
+#EX-3 here this is the pc code which will connects and display the video of esp32. my esp32cam will connects with the tcp ip port and stream the video. my pc code will receive it
+a) PC_CODE-
+import socket
+import cv2
+import io
+from PIL import Image
+import numpy as np
+
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0)
+s.bind(("0.0.0.0", 9090))
+while True:
+    data, IP = s.recvfrom(100000)
+    bytes_stream = io.BytesIO(data)
+    image = Image.open(bytes_stream)
+    img = np.asarray(image)
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)  # ESP32采集的是RGB格式，要转换为BGR（opencv的格式）
+    cv2.imshow("ESP32 Capture Image", img)
+    if cv2.waitKey(1) == ord("q"):
+        break
+
+#EX-3 b) ESP32CAM code
+import socket
+import network
+import camera
+import time
+
+
+# 连接wifi
+wlan = network.WLAN(network.STA_IF)
+wlan.active(True)
+if not wlan.isconnected():
+    print('connecting to network...')
+    wlan.connect('dongfeiqiu', 'wangmingdong1225')
+    
+    while not wlan.isconnected():
+        pass
+print('网络配置:', wlan.ifconfig())
+ 
+ 
+# 摄像头初始化
+try:
+    camera.init(0, format=camera.JPEG)
+except Exception as e:
+    camera.deinit()
+    camera.init(0, format=camera.JPEG)
+
+
+# 其他设置：
+# 上翻下翻
+camera.flip(1)
+#左/右
+camera.mirror(1)
+
+# 分辨率
+camera.framesize(camera.FRAME_HVGA)
+# 选项如下：
+# FRAME_96X96 FRAME_QQVGA FRAME_QCIF FRAME_HQVGA FRAME_240X240
+# FRAME_QVGA FRAME_CIF FRAME_HVGA FRAME_VGA FRAME_SVGA
+# FRAME_XGA FRAME_HD FRAME_SXGA FRAME_UXGA FRAME_FHD
+# FRAME_P_HD FRAME_P_3MP FRAME_QXGA FRAME_QHD FRAME_WQXGA
+# FRAME_P_FHD FRAME_QSXGA
+# 有关详细信息，请查看此链接：https://bit.ly/2YOzizz
+
+# 特效
+camera.speffect(camera.EFFECT_NONE)
+#选项如下：
+# 效果\无（默认）效果\负效果\ BW效果\红色效果\绿色效果\蓝色效果\复古效果
+# EFFECT_NONE (default) EFFECT_NEG \EFFECT_BW\ EFFECT_RED\ EFFECT_GREEN\ EFFECT_BLUE\ EFFECT_RETRO
+
+# 白平衡
+# camera.whitebalance(camera.WB_HOME)
+#选项如下：
+# WB_NONE (default) WB_SUNNY WB_CLOUDY WB_OFFICE WB_HOME
+
+# 饱和
+camera.saturation(0)
+#-2,2（默认为0）. -2灰度
+# -2,2 (default 0). -2 grayscale 
+
+# 亮度
+camera.brightness(0)
+#-2,2（默认为0）. 2亮度
+# -2,2 (default 0). 2 brightness
+
+# 对比度
+camera.contrast(0)
+#-2,2（默认为0）.2高对比度
+#-2,2 (default 0). 2 highcontrast
+
+# 质量
+camera.quality(10)
+#10-63数字越小质量越高
+
+# socket UDP 的创建
+s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM,0)
+
+try:
+    while True:
+        buf = camera.capture()  # 获取图像数据
+        s.sendto(buf, ("192.168.31.53", 9090))  # 向服务器发送图像数据
+        time.sleep(0.1)
+except:
+    pass
+finally:
+    camera.deinit()
+
+
+#EX-4 ESP32 take the image and send it to the PC using the tcp ip port. and save the mages in a folder
+EX-4 a) ESP32 CAM code
+import socket
+import cv2
+import io
+from PIL import Image
+import numpy as np
+import time
+
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0)
+s.bind(("0.0.0.0", 9090))
+
+# 设置视频的编码解码方式avi
+video_type = cv2.VideoWriter_fourcc(*'XVID')  # 视频存储的格式
+# 保存的位置，以及编码解码方式，帧率，视频帧大小
+mp4_file = cv2.VideoWriter('%s.avi' % str(time.time()), video_type, 5, (480, 320))
+
+while True:
+    data, IP = s.recvfrom(100000)
+    bytes_stream = io.BytesIO(data)
+    image = Image.open(bytes_stream)
+    img = np.asarray(image)
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)  # ESP32采集的是RGB格式，要转换为BGR（opencv的格式）
+    cv2.imshow("ESP32 Capture Image", img)
+    ret = mp4_file.write(img)
+
+    print(ret)
+    if cv2.waitKey(1) == ord("q"):
+        break
+
+EX-4 b) PC code PYQT software code
+"""
+更多项目访问 https://www.itprojects.cn
+"""
+import os
+import socket
+import sys
+import winreg
+import time
+import io
+
+import cv2
+from PIL import Image
+import numpy as np
+from PySide6.QtCore import QTimer, QThread, QSettings
+from PySide6.QtGui import QIcon, Qt, QImage, QPixmap
+from PySide6.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QGroupBox, QHBoxLayout, QStyle, QVBoxLayout, QStackedLayout, QLineEdit, QComboBox, QMessageBox, QFileDialog
+
+CAPTURE_IMAGE_DATA = None
+SAVE_VIDEO_PATH = ""
+
+
+class CaptureThread(QThread):
+    def __init__(self, ip, port):
+        super().__init__()
+        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0)
+        self.udp_socket.bind((ip, port))
+        # 设置运行的标志
+        self.run_flag = True
+        self.record_flag = False
+
+    def run(self):
+        global CAPTURE_IMAGE_DATA
+
+        while self.run_flag:
+            data, ip = self.udp_socket.recvfrom(100000)
+            bytes_stream = io.BytesIO(data)
+            image = Image.open(bytes_stream)
+            img = np.asarray(image)
+
+            if self.record_flag:  # 开始录制视频
+                # 转换数据格式，便于存储视频文件
+                img_2 = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)  # ESP32采集的是RGB格式，要转换为BGR（opencv的格式）
+                self.mp4_file.write(img_2)
+
+            # PySide显示不需要转换，所以直接用img
+            temp_image = QImage(img.flatten(), 480, 320, QImage.Format_RGB888)
+            temp_pixmap = QPixmap.fromImage(temp_image)
+            CAPTURE_IMAGE_DATA = temp_pixmap  # 暂时存储udp接收到的1帧视频画面
+
+        # 结束后 关闭套接字
+        self.udp_socket.close()
+
+    def stop_run(self):
+        self.run_flag = False
+        self.record_flag = False
+        try:
+            self.mp4_file.release()
+        except Exception as ret:
+            pass
+
+    def stop_record(self):
+        self.mp4_file.release()
+        self.record_flag = False
+
+    def start_record(self):
+        # 设置视频的编码解码方式avi
+        video_type = cv2.VideoWriter_fourcc(*'XVID')  # 视频存储的格式
+        # 保存的位置，以及编码解码方式，帧率，视频帧大小
+        file_name = "{}.avi".format(time.time())
+        file_path_name = os.path.join(SAVE_VIDEO_PATH, file_name)
+        self.mp4_file = cv2.VideoWriter(file_path_name, video_type, 5, (480, 320))
+        self.record_flag = True
+
+
+class ShowCaptureVideoWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        layout = QHBoxLayout()
+
+        # 用来显示画面的QLabel
+        self.video_label = QLabel("选择顶部的操作按钮...")
+        self.video_label.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
+        self.video_label.setScaledContents(True)
+        layout.addWidget(self.video_label)
+
+        self.setLayout(layout)
+
+
+class VideoWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("远程摄像头监控 v2022.10.13.001")
+        self.setWindowIcon(QIcon('./images/logo.png'))
+        self.resize(777, 555)
+
+        # 选择本电脑IP
+        camera_label = QLabel("选择本电脑IP：")
+
+        # ip列表
+        # 获取本地电脑的ip地址列表
+        hostname, alias_list, ip_addr_list = socket.gethostbyname_ex(socket.gethostname())
+        # print(hostname)  # DESKTOP
+        # print(alias_list)  # []
+        # print(ip_addr_list)  # ['192.168.47.1', '192.168.208.1', '192.168.31.53']
+        ip_addr_list.insert(0, "0.0.0.0")
+        self.combox = QComboBox()
+        self.combox.addItems(ip_addr_list)
+        self.ip_addr_list = ip_addr_list
+
+        # 本地端口
+        port_label = QLabel("本地端口：")
+        self.port_edit = QLineEdit("9090")
+
+        g_1 = QGroupBox("监听信息")
+        g_1.setFixedHeight(60)
+        g_1_h_layout = QHBoxLayout()
+        g_1_h_layout.addWidget(camera_label)
+        g_1_h_layout.addWidget(self.combox)
+        g_1_h_layout.addWidget(port_label)
+        g_1_h_layout.addWidget(self.port_edit)
+        g_1.setLayout(g_1_h_layout)
+
+        # 启动显示
+        self.camera_open_close_btn = QPushButton(QIcon("./images/shexiangtou.png"), "启动显示")
+        self.camera_open_close_btn.clicked.connect(self.camera_open_close)
+
+        self.record_video_btn = QPushButton(QIcon("./images/record.png"), "开始录制")
+        self.record_video_btn.clicked.connect(self.recorde_video)
+
+        save_video_path_setting_btn = QPushButton(QIcon("./images/folder.png"), "设置保存路径")
+        save_video_path_setting_btn.clicked.connect(self.save_video_path_setting)
+
+        g_2 = QGroupBox("功能操作")
+        g_2.setFixedHeight(60)
+        g_2_h_layout = QHBoxLayout()
+        g_2_h_layout.addWidget(self.camera_open_close_btn)
+        g_2_h_layout.addWidget(self.record_video_btn)
+        g_2_h_layout.addWidget(save_video_path_setting_btn)
+        g_2.setLayout(g_2_h_layout)
+
+        # --------- 整体布局 ---------
+        h_layout = QHBoxLayout()
+        h_layout.addWidget(g_1)
+        h_layout.addWidget(g_2)
+        h_layout.addStretch(1)
+
+        v_layout = QVBoxLayout()
+        v_layout.addLayout(h_layout)
+
+        # 创建底部的显示区域
+        self.stacked_layout_capture_view = ShowCaptureVideoWidget()
+        v_layout.addWidget(self.stacked_layout_capture_view)
+
+        self.setLayout(v_layout)
+
+        # 定时刷新视频画面
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.show_video_image)
+        self.load_time = 0
+        self.load_time_all = 0
+
+    def camera_open_close(self):
+        """启动创建socket线程，用来接收显示数据"""
+        if self.camera_open_close_btn.text() == "启动显示":
+            ip = self.combox.currentText()
+            try:
+                port = int(self.port_edit.text())
+            except Exception as ret:
+                QMessageBox.about(self, '警告', '端口设置错误！！！')
+                return
+
+            self.thread = CaptureThread(ip, port)
+            self.thread.daemon = True
+            self.thread.start()
+            self.timer.start(100)  # 设置计时间隔并启动
+            self.camera_open_close_btn.setText("关闭显示")
+        else:
+            self.camera_open_close_btn.setText("启动显示")
+            self.timer.stop()
+            self.stacked_layout_capture_view.video_label.clear()
+            self.thread.stop_run()
+            self.record_video_btn.setText("开始录制")
+
+    def show_video_image(self):
+        if CAPTURE_IMAGE_DATA:
+            self.stacked_layout_capture_view.video_label.setPixmap(CAPTURE_IMAGE_DATA)
+        else:
+            if time.time() - self.load_time >= 1:
+                self.load_time = time.time()
+                self.load_time_all += 1
+                self.stacked_layout_capture_view.video_label.setText("摄像头加载中...{}".format(self.load_time_all))
+
+    @staticmethod
+    def get_desktop():
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders')
+        return winreg.QueryValueEx(key, "Desktop")[0]
+
+    def save_video_path_setting(self):
+        """视频保存路径"""
+        global SAVE_VIDEO_PATH
+        if SAVE_VIDEO_PATH:
+            last_path = QSettings().value("LastFilePath")
+        else:
+            last_path = self.get_desktop()
+
+        path_name = QFileDialog.getExistingDirectory(self, '请选择保存视频的路径', last_path)
+        if not path_name:
+            return
+
+        SAVE_VIDEO_PATH = path_name
+
+    def recorde_video(self):
+        """录制视频"""
+        if self.camera_open_close_btn.text() == "启动显示":
+            QMessageBox.about(self, '警告', '请先启动显示，然后再开始录制！！！')
+            return
+
+        if not SAVE_VIDEO_PATH:
+            QMessageBox.about(self, '警告', '请先配置视频保存路径！！！')
+            return
+
+        if self.record_video_btn.text() == "开始录制":
+            self.record_video_btn.setText("停止录制")
+            self.thread.start_record()
+        else:
+            self.record_video_btn.setText("开始录制")
+            self.thread.stop_record()
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    video_window = VideoWindow()
+    video_window.show()
+    app.exec()
+
+#EX-5 Esp32 with sd card
+import uos
+from machine import SDCard
+
+
+# 挂载sd卡到sd文件夹
+try:
+    uos.mount(SDCard(), "/sd")
+except Exception as ret:
+    print("挂载失败...", ret)
+else:
+    print("挂载成功...")
+    
+
+with open("/sd/test.txt", "w") as f:
+    for i in range(1, 101):
+        f.write(str(i)+"\n")
+
+print("已经将1 2 3....100写入到sd卡中的text.txt文件")
+
+
+
+
+

@@ -13,8 +13,6 @@ with open("first_image.png", "wb") as f:
 
 #EX-2
 import camera
-
-
 # 初始化摄像头
 try:
     camera.init(0, format=camera.JPEG)
